@@ -20,8 +20,91 @@ if "%BUILD_TYPE%"=="" set BUILD_TYPE=release
 set ARCH=%2
 if "%ARCH%"=="" set ARCH=x64
 
-REM Find Visual Studio
-call :FindVS
+REM Find and setup Visual Studio - try multiple methods
+set VSCMD_FOUND=0
+
+REM Method 1: Check if already in Developer Command Prompt (cl.exe available)
+where cl.exe >nul 2>nul
+if %errorlevel%==0 (
+    echo [INFO] cl.exe already available in PATH
+    set VSCMD_FOUND=1
+    goto :BuildStart
+)
+
+REM Method 2: Try to find VS installation and call vcvarsall.bat
+echo [INFO] Searching for Visual Studio...
+
+REM VS 2022 Community
+if exist "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" (
+    echo [INFO] Found VS 2022 Community
+    call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" %ARCH%
+    if %errorlevel%==0 set VSCMD_FOUND=1
+    goto :BuildStart
+)
+
+REM VS 2022 Professional
+if exist "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvarsall.bat" (
+    echo [INFO] Found VS 2022 Professional
+    call "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvarsall.bat" %ARCH%
+    if %errorlevel%==0 set VSCMD_FOUND=1
+    goto :BuildStart
+)
+
+REM VS 2022 Enterprise
+if exist "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" (
+    echo [INFO] Found VS 2022 Enterprise
+    call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" %ARCH%
+    if %errorlevel%==0 set VSCMD_FOUND=1
+    goto :BuildStart
+)
+
+REM VS 2019 Community
+if exist "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvarsall.bat" (
+    echo [INFO] Found VS 2019 Community
+    call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvarsall.bat" %ARCH%
+    if %errorlevel%==0 set VSCMD_FOUND=1
+    goto :BuildStart
+)
+
+REM Method 3: Use vswhere.exe if available
+if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" (
+    echo [INFO] Using vswhere to find VS...
+    for /f "usebackq tokens=* delims=" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do (
+        set VS_INSTALL_DIR=%%i
+    )
+    if defined VS_INSTALL_DIR (
+        if exist "!VS_INSTALL_DIR!\VC\Auxiliary\Build\vcvarsall.bat" (
+            echo [INFO] Found VS at !VS_INSTALL_DIR!
+            call "!VS_INSTALL_DIR!\VC\Auxiliary\Build\vcvarsall.bat" %ARCH%
+            if %errorlevel%==0 set VSCMD_FOUND=1
+        )
+    )
+)
+
+:BuildStart
+if %VSCMD_FOUND%==0 (
+    echo.
+    echo ERROR: Visual Studio not found or could not initialize.
+    echo.
+    echo Please try one of these solutions:
+    echo   1. Open "Developer Command Prompt for VS 2022" from Start Menu
+    echo   2. Run this script from within that prompt
+    echo   3. Install Visual Studio 2022 with "Desktop development with C++" workload
+    echo.
+    exit /b 1
+)
+
+REM Verify cl.exe is now available
+where cl.exe >nul 2>nul
+if %errorlevel% neq 0 (
+    echo.
+    echo ERROR: cl.exe still not found after setting up VS environment.
+    echo Your PATH may be corrupted. Try restarting and using Developer Command Prompt.
+    exit /b 1
+)
+
+echo [INFO] Visual Studio environment initialized successfully
+echo.
 
 REM Set up paths
 set VAULT_DIR=%~dp0
@@ -139,37 +222,6 @@ echo   %OUTPUT_DIR%\VaultUI.exe
 echo.
 
 goto :eof
-
-REM ============================================================================
-REM Find Visual Studio installation
-REM ============================================================================
-:FindVS
-REM Try VS 2022 first
-if exist "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" (
-    call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" %ARCH%
-    goto :eof
-)
-if exist "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvarsall.bat" (
-    call "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvarsall.bat" %ARCH%
-    goto :eof
-)
-if exist "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" (
-    call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" %ARCH%
-    goto :eof
-)
-
-REM Try VS 2019
-if exist "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvarsall.bat" (
-    call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvarsall.bat" %ARCH%
-    goto :eof
-)
-if exist "C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\VC\Auxiliary\Build\vcvarsall.bat" (
-    call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\VC\Auxiliary\Build\vcvarsall.bat" %ARCH%
-    goto :eof
-)
-
-echo ERROR: Visual Studio not found. Please install VS 2019 or 2022 with C++ workload.
-exit /b 1
 
 :error
 exit /b 1
